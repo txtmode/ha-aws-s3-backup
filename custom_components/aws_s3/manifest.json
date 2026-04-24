@@ -1,0 +1,14 @@
+{
+  "domain": "aws_s3",
+  "name": "AWS S3",
+  "codeowners": ["@txtmode"],
+  "config_flow": true,
+  "dependencies": ["backup"],
+  "documentation": "https://github.com/txtmode/ha-aws-s3-backup",
+  "integration_type": "service",
+  "iot_class": "cloud_polling",
+  "loggers": ["aiobotocore"],
+  "quality_scale": "bronze",
+  "requirements": ["aiobotocore==2.21.1"],
+  "version": "1.0.0"
+}

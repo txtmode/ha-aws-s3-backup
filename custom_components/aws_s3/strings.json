@@ -1,0 +1,56 @@
+{
+  "config": {
+    "abort": {
+      "already_configured": "[%key:common::config_flow::abort::already_configured_device%]"
+    },
+    "error": {
+      "cannot_connect": "[%key:component::aws_s3::exceptions::cannot_connect::message%]",
+      "credentials_required": "Access key ID and secret access key are required when not using an IAM role.",
+      "invalid_bucket_name": "[%key:component::aws_s3::exceptions::invalid_bucket_name::message%]",
+      "invalid_credentials": "[%key:component::aws_s3::exceptions::invalid_credentials::message%]",
+      "invalid_endpoint_url": "Invalid endpoint URL. Please make sure it's a valid AWS S3 endpoint URL."
+    },
+    "step": {
+      "user": {
+        "data": {
+          "use_iam_role": "Use IAM role (EC2 instance profile)",
+          "access_key_id": "Access key ID",
+          "bucket": "Bucket name",
+          "endpoint_url": "Endpoint URL",
+          "prefix": "Prefix",
+          "secret_access_key": "Secret access key"
+        },
+        "data_description": {
+          "use_iam_role": "Use the EC2 instance profile (IMDS) for credentials instead of static access keys. Requires the instance to have an IAM role with S3 access. See [documentation]({docs_url}).",
+          "access_key_id": "Access key ID — leave empty when using IAM role",
+          "secret_access_key": "Secret access key — leave empty when using IAM role",
+          "bucket": "Bucket must already exist and be accessible with the provided credentials.",
+          "endpoint_url": "Region-specific [AWS S3 endpoint]({aws_s3_docs_url}), e.g. https://s3.eu-central-1.amazonaws.com/",
+          "prefix": "Folder or prefix to store backups in, for example `backups`"
+        },
+        "title": "Add AWS S3 bucket"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "backups_size": {
+        "name": "Total size of backups"
+      }
+    }
+  },
+  "exceptions": {
+    "cannot_connect": {
+      "message": "Cannot connect to endpoint"
+    },
+    "error_fetching_data": {
+      "message": "Error fetching data"
+    },
+    "invalid_bucket_name": {
+      "message": "Invalid bucket name"
+    },
+    "invalid_credentials": {
+      "message": "Bucket cannot be accessed. Check credentials or IAM role permissions."
+    }
+  }
+}
