@@ -2,10 +2,18 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from aiobotocore.session import AioSession
-from botocore.exceptions import ClientError, ConnectionError, ParamValidationError
+from botocore.exceptions import (
+    BotoCoreError,
+    ClientError,
+    ConnectionError,
+    NoCredentialsError,
+    NoRegionError,
+    ParamValidationError,
+)
 import voluptuous as vol
 
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
@@ -77,23 +85,26 @@ class S3ConfigFlow(ConfigFlow, domain=DOMAIN):
             else:
                 try:
                     session = AioSession()
-                    client_kwargs: dict[str, Any] = {
-                        "endpoint_url": user_input.get(CONF_ENDPOINT_URL) or None,
-                    }
+                    endpoint_url = user_input.get(CONF_ENDPOINT_URL) or None
+                    client_kwargs: dict[str, Any] = {"endpoint_url": endpoint_url}
+                    if endpoint_url:
+                        m = re.search(r's3[.\-]([a-z0-9\-]+)\.amazonaws\.com', endpoint_url)
+                        if m:
+                            client_kwargs["region_name"] = m.group(1)
                     if not use_iam_role:
                         client_kwargs["aws_access_key_id"] = user_input[CONF_ACCESS_KEY_ID]
                         client_kwargs["aws_secret_access_key"] = user_input[CONF_SECRET_ACCESS_KEY]
 
                     async with session.create_client("s3", **client_kwargs) as client:
                         await client.head_bucket(Bucket=user_input[CONF_BUCKET])
-                except ClientError:
+                except (ClientError, NoCredentialsError):
                     errors["base"] = "invalid_credentials"
                 except ParamValidationError as err:
                     if "Invalid bucket name" in str(err):
                         errors[CONF_BUCKET] = "invalid_bucket_name"
                 except ValueError:
                     errors[CONF_ENDPOINT_URL] = "invalid_endpoint_url"
-                except ConnectionError:
+                except (ConnectionError, NoRegionError, BotoCoreError):
                     errors[CONF_ENDPOINT_URL] = "cannot_connect"
                 else:
                     data: dict[str, Any] = {
