@@ -23,7 +23,7 @@ clones this repo and drives the config flow over the REST API with
 
 | Branch | Contents |
 |--------|----------|
-| `upstream` | A **pristine** copy of `homeassistant/components/aws_s3` from a tagged core release. Never edited by hand. `UPSTREAM` records the tag and sha. |
+| `upstream` | A **pristine** copy of `homeassistant/components/aws_s3` from a tagged core release. Never edited by hand. `UPSTREAM_VERSION` records the tag and sha. |
 | `main` | `upstream` merged in, plus the IAM-role patch. This is what gets deployed. |
 
 Because `upstream` is a real ancestor of `main`, updating is an ordinary three-way

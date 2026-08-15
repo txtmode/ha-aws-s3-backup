@@ -47,7 +47,7 @@ if [ ! -d "$TMP/core/$COMPONENT_PATH" ]; then
 fi
 
 if git show-ref --verify --quiet refs/heads/upstream; then
-  git checkout --quiet upstream
+  git switch --quiet upstream
 else
   echo ">> creating orphan branch 'upstream'"
   git checkout --quiet --orphan upstream
@@ -58,7 +58,7 @@ rm -rf "$VENDOR_PATH"
 mkdir -p "$(dirname "$VENDOR_PATH")"
 cp -R "$TMP/core/$COMPONENT_PATH" "$VENDOR_PATH"
 
-cat > UPSTREAM <<EOF
+cat > UPSTREAM_VERSION <<EOF
 # Pristine vendor drop of home-assistant/core:$COMPONENT_PATH
 # Refresh with scripts/sync-upstream.sh <core-tag>; never edit files here by hand.
 tag=$TAG
@@ -73,7 +73,7 @@ else
   echo ">> committed vendor drop for $TAG"
 fi
 
-git checkout --quiet "$START_BRANCH"
+git switch --quiet "$START_BRANCH"
 echo
 echo "Next:  git checkout main && git merge upstream"
 echo "Then:  push both branches — git push origin main upstream"
