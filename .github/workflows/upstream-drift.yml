@@ -1,0 +1,62 @@
+name: Upstream drift
+
+# Compares the vendored copy on the `upstream` branch against the current
+# home-assistant/core dev branch and opens (or updates) an issue when core has
+# moved. The fix is always: scripts/sync-upstream.sh <tag> && git merge upstream
+
+on:
+  schedule:
+    - cron: "0 6 * * 1" # Mondays 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: upstream
+
+      - name: Fetch aws_s3 from core@dev
+        run: |
+          git clone --quiet --filter=blob:none --no-checkout --depth=1 \
+            --branch dev https://github.com/home-assistant/core.git core
+          git -C core sparse-checkout set --no-cone homeassistant/components/aws_s3
+          git -C core checkout --quiet
+          echo "CORE_SHA=$(git -C core rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - name: Diff against vendored copy
+        id: diff
+        run: |
+          if diff -ru custom_components/aws_s3 core/homeassistant/components/aws_s3 > drift.diff; then
+            echo "drifted=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "drifted=true" >> "$GITHUB_OUTPUT"
+          fi
+          grep -E '^(tag|sha)=' UPSTREAM >> "$GITHUB_ENV"
+
+      - name: Open or update drift issue
+        if: steps.diff.outputs.drifted == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          BODY=$(
+            printf 'Vendored at core `%s` (`%s`); core dev is now `%s`.\n\n' \
+              "$tag" "${sha:0:8}" "${CORE_SHA:0:8}"
+            printf 'Refresh with:\n\n```sh\nscripts/sync-upstream.sh <core-tag>\ngit checkout main && git merge upstream\n```\n\n'
+            printf '<details><summary>diff</summary>\n\n```diff\n'
+            head -c 50000 drift.diff
+            printf '\n```\n</details>\n'
+          )
+          EXISTING=$(gh issue list --state open --label upstream-drift --json number --jq '.[0].number')
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --body "$BODY"
+          else
+            gh label create upstream-drift --color ededed --force >/dev/null 2>&1 || true
+            gh issue create --title "aws_s3 upstream has moved past $tag" \
+              --label upstream-drift --body "$BODY"
+          fi

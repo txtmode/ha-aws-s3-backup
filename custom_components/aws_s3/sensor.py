@@ -1,9 +1,8 @@
 """Support for AWS S3 sensors."""
 
-from __future__ import annotations
-
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import override
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -18,6 +17,7 @@ from homeassistant.helpers.typing import StateType
 from .coordinator import S3ConfigEntry, SensorData
 from .entity import S3Entity
 
+# Coordinator is used to centralize the data updates
 PARALLEL_UPDATES = 0
 
 
@@ -60,6 +60,7 @@ class S3SensorEntity(S3Entity, SensorEntity):
     entity_description: S3SensorEntityDescription
 
     @property
+    @override
     def native_value(self) -> StateType:
         """Return the state of the sensor."""
         return self.entity_description.value_fn(self.coordinator.data)

@@ -11,7 +11,7 @@ CONF_ACCESS_KEY_ID = "access_key_id"
 CONF_SECRET_ACCESS_KEY = "secret_access_key"
 CONF_ENDPOINT_URL = "endpoint_url"
 CONF_BUCKET = "bucket"
-CONF_PREFIX = "prefix"
+# PATCH(txtmode): opt into EC2 instance-profile credentials instead of static keys
 CONF_USE_IAM_ROLE = "use_iam_role"
 
 AWS_DOMAIN = "amazonaws.com"
@@ -21,6 +21,7 @@ DATA_BACKUP_AGENT_LISTENERS: HassKey[list[Callable[[], None]]] = HassKey(
     f"{DOMAIN}.backup_agent_listeners"
 )
 
+# PATCH(txtmode): docs for the IAM-role option live in this fork's README
 DESCRIPTION_DOCS_URL = "https://github.com/txtmode/ha-aws-s3-backup"
 DESCRIPTION_AWS_S3_DOCS_URL = "https://docs.aws.amazon.com/general/latest/gr/s3.html"
 DESCRIPTION_BOTO3_DOCS_URL = "https://boto3.amazonaws.com/v1/documentation/api/latest/reference/core/session.html"

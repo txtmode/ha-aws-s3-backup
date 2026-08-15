@@ -8,25 +8,25 @@
       "credentials_required": "Access key ID and secret access key are required when not using an IAM role.",
       "invalid_bucket_name": "[%key:component::aws_s3::exceptions::invalid_bucket_name::message%]",
       "invalid_credentials": "[%key:component::aws_s3::exceptions::invalid_credentials::message%]",
-      "invalid_endpoint_url": "Invalid endpoint URL. Please make sure it's a valid AWS S3 endpoint URL."
+      "invalid_endpoint_url": "[%key:component::aws_s3::exceptions::invalid_endpoint_url::message%]"
     },
     "step": {
       "user": {
         "data": {
-          "use_iam_role": "Use IAM role (EC2 instance profile)",
           "access_key_id": "Access key ID",
           "bucket": "Bucket name",
           "endpoint_url": "Endpoint URL",
           "prefix": "Prefix",
-          "secret_access_key": "Secret access key"
+          "secret_access_key": "Secret access key",
+          "use_iam_role": "Use IAM role (EC2 instance profile)"
         },
         "data_description": {
-          "use_iam_role": "Use the EC2 instance profile (IMDS) for credentials instead of static access keys. Requires the instance to have an IAM role with S3 access. See [documentation]({docs_url}).",
-          "access_key_id": "Access key ID — leave empty when using IAM role",
-          "secret_access_key": "Secret access key — leave empty when using IAM role",
-          "bucket": "Bucket must already exist and be accessible with the provided credentials.",
-          "endpoint_url": "Region-specific [AWS S3 endpoint]({aws_s3_docs_url}), e.g. https://s3.eu-central-1.amazonaws.com/",
-          "prefix": "Folder or prefix to store backups in, for example `backups`"
+          "access_key_id": "Access key ID to connect to AWS S3 API. Leave empty when using an IAM role.",
+          "bucket": "Bucket must already exist and be writable by the provided credentials.",
+          "endpoint_url": "Endpoint URL provided to [Boto3 Session]({boto3_docs_url}). Region-specific [AWS S3 endpoints]({aws_s3_docs_url}) are available in their docs.",
+          "prefix": "Folder or prefix to store backups in, for example `backups`",
+          "secret_access_key": "Secret access key to connect to AWS S3 API. Leave empty when using an IAM role.",
+          "use_iam_role": "Take credentials from the EC2 instance profile (IMDS) instead of static access keys. The instance role needs S3 access to the bucket. See [documentation]({docs_url})."
         },
         "title": "Add AWS S3 bucket"
       }
@@ -50,7 +50,10 @@
       "message": "Invalid bucket name"
     },
     "invalid_credentials": {
-      "message": "Bucket cannot be accessed. Check credentials or IAM role permissions."
+      "message": "Bucket cannot be accessed. Check the access key ID and secret access key, or the IAM role permissions."
+    },
+    "invalid_endpoint_url": {
+      "message": "Invalid endpoint URL. Please make sure it's a valid AWS S3 endpoint URL."
     }
   }
 }

@@ -5,7 +5,7 @@ import functools
 import json
 import logging
 from time import time
-from typing import Any, cast
+from typing import Any, cast, override
 
 from botocore.exceptions import BotoCoreError
 
@@ -17,10 +17,11 @@ from homeassistant.components.backup import (
     OnProgressCallback,
     suggested_filename,
 )
+from homeassistant.const import CONF_PREFIX
 from homeassistant.core import HomeAssistant, callback
 
 from . import S3ConfigEntry
-from .const import CONF_BUCKET, CONF_PREFIX, DATA_BACKUP_AGENT_LISTENERS, DOMAIN
+from .const import CONF_BUCKET, DATA_BACKUP_AGENT_LISTENERS, DOMAIN
 from .helpers import async_list_backups_from_s3
 
 _LOGGER = logging.getLogger(__name__)
@@ -110,12 +111,17 @@ class S3BackupAgent(BackupAgent):
         return f"{self._prefix}/{key}"
 
     @handle_boto_errors
+    @override
     async def async_download_backup(
         self,
         backup_id: str,
         **kwargs: Any,
     ) -> AsyncIterator[bytes]:
-        """Download a backup file."""
+        """Download a backup file.
+
+        :param backup_id: The ID of the backup that was returned in async_list_backups.
+        :return: An async iterator that yields bytes.
+        """
         backup = await self._find_backup_by_id(backup_id)
         tar_filename, _ = suggested_filenames(backup)
 
@@ -124,6 +130,7 @@ class S3BackupAgent(BackupAgent):
         )
         return response["Body"].iter_chunks()
 
+    @override
     async def async_upload_backup(
         self,
         *,
@@ -132,7 +139,11 @@ class S3BackupAgent(BackupAgent):
         on_progress: OnProgressCallback,
         **kwargs: Any,
     ) -> None:
-        """Upload a backup."""
+        """Upload a backup.
+
+        :param open_stream: A function returning an async iterator that yields bytes.
+        :param backup: Metadata about the backup that should be uploaded.
+        """
         tar_filename, metadata_filename = suggested_filenames(backup)
 
         try:
@@ -141,6 +152,7 @@ class S3BackupAgent(BackupAgent):
             else:
                 await self._upload_multipart(tar_filename, open_stream, on_progress)
 
+            # Upload the metadata file
             metadata_content = json.dumps(backup.as_dict())
             await self._client.put_object(
                 Bucket=self._bucket,
@@ -150,6 +162,7 @@ class S3BackupAgent(BackupAgent):
         except BotoCoreError as err:
             raise BackupAgentError("Failed to upload backup") from err
         else:
+            # Reset cache after successful upload
             self._cache_expiration = time()
 
     async def _upload_simple(
@@ -157,7 +170,12 @@ class S3BackupAgent(BackupAgent):
         tar_filename: str,
         open_stream: Callable[[], Coroutine[Any, Any, AsyncIterator[bytes]]],
     ) -> None:
-        """Upload a small file using simple upload."""
+        """Upload a small file using simple upload.
+
+        :param tar_filename: The target filename for the backup.
+        :param open_stream: A function returning an async iterator that yields bytes.
+        """
+        _LOGGER.debug("Starting simple upload for %s", tar_filename)
         stream = await open_stream()
         file_data = bytearray()
         async for chunk in stream:
@@ -175,7 +193,13 @@ class S3BackupAgent(BackupAgent):
         open_stream: Callable[[], Coroutine[Any, Any, AsyncIterator[bytes]]],
         on_progress: OnProgressCallback,
     ) -> None:
-        """Upload a large file using multipart upload."""
+        """Upload a large file using multipart upload.
+
+        :param tar_filename: The target filename for the backup.
+        :param open_stream: A function returning an async iterator that yields bytes.
+        :param on_progress: A callback to report the number of uploaded bytes.
+        """
+        _LOGGER.debug("Starting multipart upload for %s", tar_filename)
         multipart_upload = await self._client.create_multipart_upload(
             Bucket=self._bucket,
             Key=self._with_prefix(tar_filename),
@@ -184,14 +208,16 @@ class S3BackupAgent(BackupAgent):
         try:
             parts: list[dict[str, Any]] = []
             part_number = 1
-            buffer = bytearray()
-            offset = 0
+            buffer = bytearray()  # bytes buffer to store the data
+            offset = 0  # start index of unread data inside buffer
             bytes_uploaded = 0
 
             stream = await open_stream()
             async for chunk in stream:
                 buffer.extend(chunk)
 
+                # Upload parts of exactly MULTIPART_MIN_PART_SIZE_BYTES to ensure
+                # all non-trailing parts have the same size (defensive implementation)
                 view = memoryview(buffer)
                 try:
                     while len(buffer) - offset >= MULTIPART_MIN_PART_SIZE_BYTES:
@@ -200,6 +226,11 @@ class S3BackupAgent(BackupAgent):
                         part_data = view[start:end]
                         offset = end
 
+                        _LOGGER.debug(
+                            "Uploading part number %d, size %d",
+                            part_number,
+                            len(part_data),
+                        )
                         part = await cast(Any, self._client).upload_part(
                             Bucket=self._bucket,
                             Key=self._with_prefix(tar_filename),
@@ -214,12 +245,23 @@ class S3BackupAgent(BackupAgent):
                 finally:
                     view.release()
 
+                # Compact the buffer if the consumed offset has grown
+                # large enough. This avoids unnecessary memory copies
+                # when compacting after every part upload.
                 if offset and offset >= MULTIPART_MIN_PART_SIZE_BYTES:
                     buffer = bytearray(buffer[offset:])
                     offset = 0
 
+            # Upload the final buffer as the last part (no minimum size requirement)
+            # Offset should be 0 after the last compaction, but we use it as the start
+            # index to be defensive in case the buffer was not compacted.
             if offset < len(buffer):
                 remaining_data = memoryview(buffer)[offset:]
+                _LOGGER.debug(
+                    "Uploading final part number %d, size %d",
+                    part_number,
+                    len(remaining_data),
+                )
                 part = await cast(Any, self._client).upload_part(
                     Bucket=self._bucket,
                     Key=self._with_prefix(tar_filename),
@@ -250,11 +292,20 @@ class S3BackupAgent(BackupAgent):
             raise
 
     @handle_boto_errors
-    async def async_delete_backup(self, backup_id: str, **kwargs: Any) -> None:
-        """Delete a backup file."""
+    @override
+    async def async_delete_backup(
+        self,
+        backup_id: str,
+        **kwargs: Any,
+    ) -> None:
+        """Delete a backup file.
+
+        :param backup_id: The ID of the backup that was returned in async_list_backups.
+        """
         backup = await self._find_backup_by_id(backup_id)
         tar_filename, metadata_filename = suggested_filenames(backup)
 
+        # Delete both the backup file and its metadata file
         await self._client.delete_object(
             Bucket=self._bucket, Key=self._with_prefix(tar_filename)
         )
@@ -262,16 +313,23 @@ class S3BackupAgent(BackupAgent):
             Bucket=self._bucket, Key=self._with_prefix(metadata_filename)
         )
 
+        # Reset cache after successful deletion
         self._cache_expiration = time()
 
     @handle_boto_errors
+    @override
     async def async_list_backups(self, **kwargs: Any) -> list[AgentBackup]:
         """List backups."""
         backups = await self._list_backups()
         return list(backups.values())
 
     @handle_boto_errors
-    async def async_get_backup(self, backup_id: str, **kwargs: Any) -> AgentBackup:
+    @override
+    async def async_get_backup(
+        self,
+        backup_id: str,
+        **kwargs: Any,
+    ) -> AgentBackup:
         """Return a backup."""
         return await self._find_backup_by_id(backup_id)
 
@@ -280,6 +338,7 @@ class S3BackupAgent(BackupAgent):
         backups = await self._list_backups()
         if backup := backups.get(backup_id):
             return backup
+
         raise BackupNotFound(f"Backup {backup_id} not found")
 
     async def _list_backups(self) -> dict[str, AgentBackup]:

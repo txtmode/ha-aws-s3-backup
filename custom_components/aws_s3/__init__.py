@@ -1,7 +1,5 @@
 """The AWS S3 integration."""
 
-from __future__ import annotations
-
 import logging
 from typing import Any, cast
 
@@ -32,17 +30,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: S3ConfigEntry) -> bool:
     """Set up S3 from a config entry."""
 
     data = cast(dict, entry.data)
-    use_iam_role = data.get(CONF_USE_IAM_ROLE, False)
-
     try:
         session = AioSession()
-        client_kwargs: dict[str, Any] = {
-            "endpoint_url": data.get(CONF_ENDPOINT_URL),
-        }
-        if not use_iam_role:
-            client_kwargs["aws_access_key_id"] = data[CONF_ACCESS_KEY_ID]
+        # PATCH(txtmode): with CONF_USE_IAM_ROLE the entry holds no keys — leaving
+        # them out of create_client() lets botocore resolve temporary credentials
+        # from the EC2 instance metadata service (IMDS).
+        client_kwargs: dict[str, Any] = {"endpoint_url": data.get(CONF_ENDPOINT_URL)}
+        if not data.get(CONF_USE_IAM_ROLE, False):
             client_kwargs["aws_secret_access_key"] = data[CONF_SECRET_ACCESS_KEY]
-
+            client_kwargs["aws_access_key_id"] = data[CONF_ACCESS_KEY_ID]
         # pylint: disable-next=unnecessary-dunder-call
         client = await session.create_client("s3", **client_kwargs).__aenter__()
         await client.head_bucket(Bucket=data[CONF_BUCKET])
